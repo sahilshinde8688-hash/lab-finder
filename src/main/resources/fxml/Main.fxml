@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<StackPane fx:id="root" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+           fx:controller="com.sakec.smartspace.controller.MainController">
+    <BorderPane>
+        <left>
+            <VBox styleClass="sidebar" minWidth="232" prefWidth="232">
+                <HBox fx:id="brandBox" alignment="CENTER_LEFT" spacing="10" styleClass="sidebar-brand"/>
+                <Label styleClass="sidebar-section" text="MENU"/>
+                <VBox fx:id="navBox" spacing="4" VBox.vgrow="ALWAYS"/>
+                <HBox alignment="CENTER_LEFT" spacing="10" styleClass="sidebar-profile">
+                    <StackPane styleClass="avatar"><Label fx:id="avatarLabel" styleClass="avatar-text"/></StackPane>
+                    <VBox HBox.hgrow="ALWAYS">
+                        <Label fx:id="nameLabel" styleClass="profile-name"/>
+                        <Label fx:id="roleLabel" styleClass="profile-role"/>
+                    </VBox>
+                </HBox>
+            </VBox>
+        </left>
+        <top>
+            <HBox alignment="CENTER_LEFT" spacing="14" styleClass="header">
+                <Label fx:id="pageTitle" styleClass="header-title"/>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Label fx:id="dateLabel" styleClass="header-date"/>
+                <StackPane>
+                    <Button fx:id="bellButton" styleClass="icon-btn" onAction="#openNotifications"/>
+                    <Label fx:id="badgeLabel" styleClass="badge-count" mouseTransparent="true" visible="false" StackPane.alignment="TOP_RIGHT"/>
+                </StackPane>
+                <MenuButton fx:id="profileMenu" styleClass="profile-menu">
+                    <items>
+                        <MenuItem onAction="#changePassword" text="Change password"/>
+                        <MenuItem onAction="#signOut" text="Sign out"/>
+                    </items>
+                </MenuButton>
+            </HBox>
+        </top>
+        <center>
+            <StackPane fx:id="contentHost" styleClass="content-host"/>
+        </center>
+    </BorderPane>
+</StackPane>

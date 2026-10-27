@@ -1,0 +1,23 @@
+-- SAMPLE rooms for development only. Replace with the real inventory through the Rooms screen.
+INSERT OR IGNORE INTO rooms(room_name,floor_number,room_type,capacity,facilities,is_sample) VALUES ('SAMPLE-101',1,'CLASSROOM',60,'Projector,Whiteboard',1);
+INSERT OR IGNORE INTO rooms(room_name,floor_number,room_type,capacity,facilities,is_sample) VALUES ('SAMPLE-102',1,'CLASSROOM',40,'Projector,Whiteboard,Air Conditioning',1);
+INSERT OR IGNORE INTO rooms(room_name,floor_number,room_type,capacity,facilities,is_sample) VALUES ('SAMPLE-103',1,'LABORATORY',30,'Lab Benches,Projector',1);
+INSERT OR IGNORE INTO rooms(room_name,floor_number,room_type,capacity,facilities,is_sample) VALUES ('SAMPLE-201',2,'CLASSROOM',60,'Projector,Whiteboard',1);
+INSERT OR IGNORE INTO rooms(room_name,floor_number,room_type,capacity,facilities,is_sample) VALUES ('SAMPLE-202',2,'CLASSROOM',40,'Projector,Whiteboard,Air Conditioning',1);
+INSERT OR IGNORE INTO rooms(room_name,floor_number,room_type,capacity,facilities,is_sample) VALUES ('SAMPLE-203',2,'COMPUTER_LAB',30,'Computers,Projector,Air Conditioning',1);
+INSERT OR IGNORE INTO rooms(room_name,floor_number,room_type,capacity,facilities,is_sample) VALUES ('SAMPLE-301',3,'CLASSROOM',60,'Projector,Whiteboard',1);
+INSERT OR IGNORE INTO rooms(room_name,floor_number,room_type,capacity,facilities,is_sample) VALUES ('SAMPLE-302',3,'CLASSROOM',40,'Projector,Whiteboard,Air Conditioning',1);
+INSERT OR IGNORE INTO rooms(room_name,floor_number,room_type,capacity,facilities,is_sample) VALUES ('SAMPLE-303',3,'LABORATORY',30,'Lab Benches,Projector',1);
+INSERT OR IGNORE INTO rooms(room_name,floor_number,room_type,capacity,facilities,is_sample) VALUES ('SAMPLE-401',4,'CLASSROOM',60,'Projector,Whiteboard',1);
+INSERT OR IGNORE INTO rooms(room_name,floor_number,room_type,capacity,facilities,is_sample) VALUES ('SAMPLE-402',4,'CLASSROOM',40,'Projector,Whiteboard,Air Conditioning',1);
+INSERT OR IGNORE INTO rooms(room_name,floor_number,room_type,capacity,facilities,is_sample) VALUES ('SAMPLE-403',4,'COMPUTER_LAB',30,'Computers,Projector,Air Conditioning',1);
+INSERT OR IGNORE INTO rooms(room_name,floor_number,room_type,capacity,facilities,is_sample) VALUES ('SAMPLE-501',5,'CLASSROOM',60,'Projector,Whiteboard',1);
+INSERT OR IGNORE INTO rooms(room_name,floor_number,room_type,capacity,facilities,is_sample) VALUES ('SAMPLE-502',5,'CLASSROOM',40,'Projector,Whiteboard,Air Conditioning',1);
+INSERT OR IGNORE INTO rooms(room_name,floor_number,room_type,capacity,facilities,is_sample) VALUES ('SAMPLE-503',5,'LABORATORY',30,'Lab Benches,Projector',1);
+INSERT OR IGNORE INTO rooms(room_name,floor_number,room_type,capacity,facilities,is_sample) VALUES ('SAMPLE-601',6,'CLASSROOM',60,'Projector,Whiteboard',1);
+INSERT OR IGNORE INTO rooms(room_name,floor_number,room_type,capacity,facilities,is_sample) VALUES ('SAMPLE-602',6,'CLASSROOM',40,'Projector,Whiteboard,Air Conditioning',1);
+INSERT OR IGNORE INTO rooms(room_name,floor_number,room_type,capacity,facilities,is_sample) VALUES ('SAMPLE-603',6,'COMPUTER_LAB',30,'Computers,Projector,Air Conditioning',1);
+INSERT OR IGNORE INTO rooms(room_name,floor_number,room_type,capacity,facilities,is_sample) VALUES ('SAMPLE-701',7,'CLASSROOM',60,'Projector,Whiteboard',1);
+INSERT OR IGNORE INTO rooms(room_name,floor_number,room_type,capacity,facilities,is_sample) VALUES ('SAMPLE-702',7,'CLASSROOM',40,'Projector,Whiteboard,Air Conditioning',1);
+INSERT OR IGNORE INTO rooms(room_name,floor_number,room_type,capacity,facilities,is_sample) VALUES ('SAMPLE-703',7,'LABORATORY',30,'Lab Benches,Projector',1);
+INSERT OR IGNORE INTO rooms(room_name,floor_number,room_type,capacity,facilities,is_sample) VALUES ('SAMPLE-704',7,'SEMINAR_ROOM',120,'Projector,Sound System,Air Conditioning',1);

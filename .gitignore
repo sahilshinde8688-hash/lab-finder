@@ -1,0 +1,5 @@
+target/
+*.db
+smartspace.properties
+.idea/
+*.iml
