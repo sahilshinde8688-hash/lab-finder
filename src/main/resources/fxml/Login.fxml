@@ -1,44 +1,99 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.geometry.Insets?>
+<?import javafx.geometry.Pos?>
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
-<StackPane fx:id="root" styleClass="login-root" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+<StackPane fx:id="root" styleClass="login-root" xmlns="http://javafx.com/javafx/21"
+           xmlns:fx="http://javafx.com/fxml/1"
            fx:controller="com.sakec.smartspace.controller.LoginController">
-    <HBox>
-        <StackPane fx:id="artPane" styleClass="login-art" minWidth="380" HBox.hgrow="ALWAYS"/>
-        <StackPane styleClass="login-form-side" minWidth="440" prefWidth="540" maxWidth="600">
-            <VBox fx:id="formBox" alignment="CENTER_LEFT" maxWidth="380" spacing="16">
-                <HBox fx:id="brandBox" alignment="CENTER" spacing="8">
-                </HBox>
+    <HBox fx:id="contentRow" fillHeight="true">
+        <StackPane fx:id="artPane" styleClass="login-art" minWidth="0" HBox.hgrow="ALWAYS"/>
+        <StackPane fx:id="formSide" styleClass="login-form-side" minWidth="0"
+                   prefWidth="512" maxWidth="600">
+            <VBox fx:id="formBox" alignment="CENTER_LEFT" maxWidth="400" spacing="16">
+                <HBox fx:id="brandBox" alignment="CENTER_LEFT" spacing="8"/>
+
+                <!-- Heading -->
                 <VBox spacing="6">
-                    <padding><Insets top="18"/></padding>
                     <Label styleClass="login-title" text="Welcome back"/>
-                    <Label styleClass="muted" text="Sign in to find and manage campus spaces."/>
+                    <Label styleClass="muted login-subtitle" wrapText="true"
+                           text="Sign in to find and manage campus spaces."/>
                 </VBox>
+
+                <!-- Email field -->
                 <VBox spacing="6">
-                    <Label styleClass="field-label" text="SAKEC email"/>
-                    <TextField fx:id="emailField" promptText="name@sakec.ac.in" onAction="#signIn"/>
-                    <Label fx:id="emailError" styleClass="error-text" managed="false" visible="false" wrapText="true"/>
+                    <Label fx:id="emailLabel" styleClass="field-label" text="SAKEC email"/>
+                    <TextField fx:id="emailField" promptText="name@sakec.ac.in"
+                               accessibleText="SAKEC email address" onAction="#signIn"/>
+                    <Label fx:id="emailError" styleClass="error-text"
+                           managed="false" visible="false" wrapText="true"/>
                 </VBox>
+
+                <!-- Password field -->
                 <VBox spacing="6">
-                    <Label styleClass="field-label" text="Password"/>
+                    <Label fx:id="passwordLabel" styleClass="field-label" text="Password"/>
                     <HBox alignment="CENTER_LEFT" spacing="8">
                         <StackPane HBox.hgrow="ALWAYS">
-                            <PasswordField fx:id="passwordField" promptText="Enter your password" onAction="#signIn"/>
-                            <TextField fx:id="passwordVisible" promptText="Enter your password" managed="false" visible="false" onAction="#signIn"/>
+                            <PasswordField fx:id="passwordField"
+                                           promptText="Enter your password"
+                                           accessibleText="Password" onAction="#signIn"/>
+                            <TextField fx:id="passwordVisible"
+                                       promptText="Enter your password"
+                                       accessibleText="Password"
+                                       managed="false" visible="false" onAction="#signIn"/>
                         </StackPane>
-                        <Button fx:id="toggleButton" styleClass="icon-btn" onAction="#togglePassword"/>
+                        <Button fx:id="toggleButton" styleClass="icon-btn"
+                                onAction="#togglePassword"
+                                accessibleText="Show password"
+                                accessibleHelp="Shows or hides the password"/>
+                    </HBox>
+                    <Label fx:id="passwordError" styleClass="error-text"
+                           managed="false" visible="false" wrapText="true"/>
+                </VBox>
+
+                <CheckBox fx:id="rememberCheck" text="Remember my email on this computer"/>
+
+                <!-- Generic form error -->
+                <Label fx:id="formError" styleClass="error-box"
+                       managed="false" visible="false" wrapText="true"/>
+
+                <!-- Email verification banner — shown when login is blocked pending confirmation -->
+                <VBox fx:id="verifyBanner" spacing="10" managed="false" visible="false"
+                      styleClass="verify-banner">
+                    <Label styleClass="verify-banner-title"
+                           text="Email not yet verified"/>
+                    <Label styleClass="verify-banner-body" wrapText="true"
+                           text="Please click the confirmation link sent to your SAKEC email. Once verified, sign in here and your account will unlock automatically."/>
+                    <HBox spacing="10" alignment="CENTER_LEFT">
+                        <Button fx:id="resendButton"
+                                styleClass="btn,btn-secondary,btn-sm"
+                                text="Resend verification email"
+                                onAction="#resendVerificationEmail"/>
+                        <Label fx:id="resendStatus" styleClass="ok-text"
+                               managed="false" visible="false" wrapText="true"/>
                     </HBox>
                 </VBox>
-                <CheckBox fx:id="rememberCheck" text="Remember my email on this computer"/>
-                <Label fx:id="formError" styleClass="error-box" managed="false" visible="false" wrapText="true"/>
-                <HBox alignment="CENTER_LEFT" spacing="12">
-                    <Button fx:id="signInButton" styleClass="btn,btn-primary,btn-wide" defaultButton="true" maxWidth="Infinity" onAction="#signIn" text="Sign in" HBox.hgrow="ALWAYS"/>
-                    <ProgressIndicator fx:id="spinner" managed="false" visible="false" maxHeight="26" maxWidth="26"/>
-                </HBox>
-                <Label styleClass="muted-small" wrapText="true" text="Forgot your password? Ask the timetable coordinator to reset it. Accounts are created by the coordinator."/>
+
+                <!-- Sign-in button + spinner -->
+                <StackPane maxWidth="Infinity">
+                    <Button fx:id="signInButton"
+                            styleClass="btn,btn-primary,btn-wide,login-signin"
+                            defaultButton="true" maxWidth="Infinity"
+                            onAction="#signIn" text="Sign in"/>
+                    <ProgressIndicator fx:id="spinner" managed="false" visible="false"
+                                       maxHeight="20" maxWidth="20"
+                                       StackPane.alignment="CENTER_RIGHT">
+                        <StackPane.margin><Insets right="16"/></StackPane.margin>
+                    </ProgressIndicator>
+                </StackPane>
+
+                <Label styleClass="muted-small login-help" wrapText="true"
+                       text="Forgot your password? Ask the timetable coordinator to reset it."/>
+                <Label styleClass="login-signup-link" wrapText="true"
+                       onMouseClicked="#goToSignup"
+                       text="New student? Create an account"/>
             </VBox>
         </StackPane>
     </HBox>

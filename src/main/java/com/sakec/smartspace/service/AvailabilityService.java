@@ -5,6 +5,7 @@ import com.sakec.smartspace.dao.MaintenanceDao;
 import com.sakec.smartspace.dao.RoomDao;
 import com.sakec.smartspace.dao.TimetableDao;
 import com.sakec.smartspace.model.Booking;
+import com.sakec.smartspace.model.BookingStatus;
 import com.sakec.smartspace.model.MaintenanceRecord;
 import com.sakec.smartspace.model.Room;
 import com.sakec.smartspace.model.RoomAvailability;
@@ -70,23 +71,39 @@ public class AvailabilityService {
                 return new RoomAvailability(room, RoomStatus.UNDER_MAINTENANCE, shorten(m.description()));
             }
         }
-        LocalDateTime nextStart = null;
+        List<TimetableEntry> scheduledConflicts = new ArrayList<>();
+        LocalDateTime firstScheduledEnd = null;
         for (LocalDate d = from.toLocalDate(); !d.isAfter(to.toLocalDate()); d = d.plusDays(1)) {
             for (TimetableEntry e : s.timetable()) {
                 if (e.roomId() != room.id() || !e.occursOn(d)) continue;
                 LocalDateTime st = e.startOn(d), en = e.endOn(d);
                 if (Dt.overlaps(from, to, st, en)) {
-                    return new RoomAvailability(room, RoomStatus.OCCUPIED,
-                            e.subject() + " · " + e.className() + " until " + en.format(Dt.TIME));
+                    scheduledConflicts.add(e);
+                    if (firstScheduledEnd == null) firstScheduledEnd = en;
                 }
             }
         }
-        for (Booking b : s.bookings()) {
-            if (b.roomId() == room.id() && Dt.overlaps(from, to, b.start(), b.end())) {
-                return new RoomAvailability(room, RoomStatus.RESERVED,
-                        "Reserved until " + b.end().format(Dt.TIME) + " · " + shorten(b.purpose()));
-            }
+        List<Booking> bookingConflicts = s.bookings().stream()
+                .filter(b -> b.roomId() == room.id() && blocksAvailability(b.status())
+                        && Dt.overlaps(from, to, b.start(), b.end()))
+                .toList();
+        int conflictCount = scheduledConflicts.size() + bookingConflicts.size();
+        if (conflictCount > 1) {
+            RoomStatus status = scheduledConflicts.isEmpty() ? RoomStatus.RESERVED : RoomStatus.OCCUPIED;
+            return new RoomAvailability(room, status, "Conflicting schedule records overlap this slot; treat the room as "
+                    + status.label().toLowerCase() + " until the records are resolved.");
         }
+        if (!scheduledConflicts.isEmpty()) {
+            TimetableEntry e = scheduledConflicts.get(0);
+            return new RoomAvailability(room, RoomStatus.OCCUPIED,
+                    e.subject() + " · " + e.className() + " until " + firstScheduledEnd.format(Dt.TIME));
+        }
+        if (!bookingConflicts.isEmpty()) {
+            Booking b = bookingConflicts.get(0);
+            return new RoomAvailability(room, RoomStatus.RESERVED,
+                    "Reserved until " + b.end().format(Dt.TIME) + " · " + shorten(b.purpose()));
+        }
+        LocalDateTime nextStart = null;
         // Available: find the next thing that will start later the same day
         LocalDate day = to.toLocalDate();
         for (TimetableEntry e : s.timetable()) {
@@ -95,12 +112,17 @@ public class AvailabilityService {
             }
         }
         for (Booking b : s.bookings()) {
-            if (b.roomId() == room.id() && !b.start().isBefore(to) && b.start().toLocalDate().equals(day)) {
+            if (b.roomId() == room.id() && blocksAvailability(b.status())
+                    && !b.start().isBefore(to) && b.start().toLocalDate().equals(day)) {
                 if (nextStart == null || b.start().isBefore(nextStart)) nextStart = b.start();
             }
         }
         String detail = nextStart == null ? "Free for the rest of the day" : "Free until " + nextStart.format(Dt.TIME);
         return new RoomAvailability(room, RoomStatus.AVAILABLE, detail);
+    }
+
+    private static boolean blocksAvailability(BookingStatus status) {
+        return status == BookingStatus.APPROVED || status == BookingStatus.COMPLETED;
     }
 
     private static void checkWindow(LocalDateTime from, LocalDateTime to) {

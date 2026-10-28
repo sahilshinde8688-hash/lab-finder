@@ -19,17 +19,21 @@ public class RoomCard extends VBox {
         Room r = a.room();
         getStyleClass().addAll("card", "room-card");
         setPrefWidth(300);
-        setMinWidth(260);
+        setMinWidth(220);
 
         Label name = new Label(r.name());
         name.getStyleClass().add("room-name");
-        name.setMinWidth(javafx.scene.layout.Region.USE_PREF_SIZE);
+        name.setMinWidth(0);
+        name.setWrapText(true);
         Label meta = new Label("Floor " + r.floor() + " · " + r.type().label() + (r.sample() ? " · sample" : ""));
         meta.getStyleClass().add("muted");
         meta.setWrapText(true);
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox top = new HBox(8, new VBox(2, name, meta), spacer, StatusBadge.of(a.status()));
+        VBox nameBox = new VBox(2, name, meta);
+        nameBox.setMinWidth(0);
+        HBox.setHgrow(nameBox, Priority.ALWAYS);
+        HBox top = new HBox(8, nameBox, spacer, StatusBadge.of(a.status()));
         top.setAlignment(Pos.TOP_LEFT);
 
         Label detail = new Label(a.detail());

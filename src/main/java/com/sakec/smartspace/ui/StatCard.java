@@ -3,6 +3,7 @@ package com.sakec.smartspace.ui;
 import javafx.geometry.Pos;
 import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
@@ -20,7 +21,13 @@ public class StatCard extends HBox {
         value.setText(initialValue);
         Label cap = new Label(caption);
         cap.getStyleClass().add("stat-caption");
-        getChildren().addAll(chip, new VBox(2, value, cap));
+        cap.setWrapText(true);
+        cap.setMinWidth(0);
+        VBox text = new VBox(2, value, cap);
+        text.setMinWidth(0);
+        HBox.setHgrow(text, Priority.ALWAYS);
+        getChildren().addAll(chip, text);
+        setMinWidth(0);
         Anim.hoverLift(this);
     }
 

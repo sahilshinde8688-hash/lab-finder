@@ -54,7 +54,7 @@ public class AnalyticsPage extends Page {
         expTt.setOnAction(e -> export("timetable", (f, r) -> reports.exportTimetable(f, r.from(), r.to())));
         HBox filters = new HBox(12, Forms.field("From", from), Forms.field("To", to), Forms.field(" ", apply));
         filters.setAlignment(Pos.BOTTOM_LEFT);
-        body.getChildren().addAll(Forms.pageHeader("Analytics", "Real figures from saved timetable, bookings and maintenance records.", expUtil, expBook, expTt),
+        body.getChildren().addAll(Forms.pageHeader("Analytics", "Historical schedule and confirmed-booking records; physical attendance is not measured.", expUtil, expBook, expTt),
                 filters, content);
     }
 
@@ -87,22 +87,24 @@ public class AnalyticsPage extends Page {
         String rate = approved + rejected == 0 ? "–" : Math.round(approved * 100.0 / (approved + rejected)) + "%";
 
         HBox stats = new HBox(16,
-                new StatCard("chart", "Overall room utilization", String.format("%.1f%%", r.overallPercent()), "blue"),
+                new StatCard("chart", "Room-time used (schedule + bookings)", String.format("%.1f%%", r.overallPercent()), "blue"),
                 new StatCard("calendar", "Booking requests", String.valueOf(total), "navy"),
                 new StatCard("check-circle", "Approval rate (decided)", rate, "teal"),
                 new StatCard("tool", "Maintenance records", String.valueOf(r.maintenance().size()), "amber"));
         stats.getChildren().forEach(n -> HBox.setHgrow(n, Priority.ALWAYS));
         stats.getChildren().forEach(n -> ((javafx.scene.layout.Region) n).setMaxWidth(Double.MAX_VALUE));
 
-        // most used rooms
+        // Confirmed booking frequency is distinct from the amount of scheduled room time.
         CategoryAxis x1 = new CategoryAxis();
-        NumberAxis y1 = new NumberAxis(0, 100, 20);
-        y1.setLabel("Utilization %");
+        NumberAxis y1 = new NumberAxis();
+        y1.setLabel("Confirmed bookings");
         y1.setMinorTickVisible(false);
         BarChart<String, Number> usage = chart(x1, y1);
         XYChart.Series<String, Number> s1 = new XYChart.Series<>();
-        for (RoomUtil u : r.utilization().stream().limit(8).toList()) {
-            s1.getData().add(new XYChart.Data<>(u.room().name(), Math.round(u.percent() * 10) / 10.0));
+        for (RoomUtil u : r.utilization().stream()
+                .sorted(java.util.Comparator.comparingInt(RoomUtil::confirmedBookingCount).reversed())
+                .limit(8).toList()) {
+            s1.getData().add(new XYChart.Data<>(u.room().name(), u.confirmedBookingCount()));
         }
         usage.getData().add(s1);
 
@@ -135,6 +137,27 @@ public class AnalyticsPage extends Page {
         floors.getData().add(free);
         floors.getData().add(all);
 
+        BarChart<String, Number> hourly = periodChart("Recorded hours", r.byHour());
+        BarChart<String, Number> daily = periodChart("Recorded hours", r.byDay());
+        CategoryAxis floorAxis = new CategoryAxis();
+        NumberAxis floorPercent = new NumberAxis(0, 100, 20);
+        floorPercent.setLabel("Scheduled room-time %");
+        BarChart<String, Number> floorUsage = chart(floorAxis, floorPercent);
+        XYChart.Series<String, Number> floorSeries = new XYChart.Series<>();
+        r.utilizationByFloor().forEach((floor, percent) -> floorSeries.getData().add(
+                new XYChart.Data<>("Floor " + floor, Math.round(percent * 10) / 10.0)));
+        floorUsage.getData().add(floorSeries);
+
+        CategoryAxis underusedAxis = new CategoryAxis();
+        NumberAxis underusedPercent = new NumberAxis(0, 100, 20);
+        underusedPercent.setLabel("Scheduled room-time %");
+        BarChart<String, Number> underused = chart(underusedAxis, underusedPercent);
+        XYChart.Series<String, Number> lowUsage = new XYChart.Series<>();
+        r.utilization().stream().sorted(java.util.Comparator.comparingDouble(RoomUtil::percent))
+                .limit(8).forEach(room -> lowUsage.getData().add(new XYChart.Data<>(room.room().name(),
+                        Math.round(room.percent() * 10) / 10.0)));
+        underused.getData().add(lowUsage);
+
         // approval statistics
         PieChart pie = new PieChart();
         for (BookingStatus st : BookingStatus.values()) {
@@ -154,10 +177,14 @@ public class AnalyticsPage extends Page {
             cc.setPercentWidth(50);
             grid.getColumnConstraints().add(cc);
         }
-        grid.add(Forms.card("Most used rooms", usage), 0, 0);
-        grid.add(Forms.card("Classroom vs laboratory usage", types), 1, 0);
+        grid.add(Forms.card("Most frequently booked rooms", usage), 0, 0);
+        grid.add(Forms.card("Room time by type (schedule + bookings)", types), 1, 0);
         grid.add(Forms.card("Available rooms by floor (right now)", floors), 0, 1);
         grid.add(Forms.card("Booking approval statistics", pie), 1, 1);
+        grid.add(Forms.card("Recorded use by hour (scheduled vs confirmed)", hourly), 0, 2);
+        grid.add(Forms.card("Recorded use by day (scheduled vs confirmed)", daily), 1, 2);
+        grid.add(Forms.card("Room-time utilization by floor", floorUsage), 0, 3);
+        grid.add(Forms.card("Least-used rooms in this date range", underused), 1, 3);
 
         List<MaintenanceRecord> maint = r.maintenance();
         var table = Tables.table(maint, "No maintenance records", "Nothing was reported in this period.",
@@ -178,5 +205,24 @@ public class AnalyticsPage extends Page {
         c.setPrefHeight(300);
         c.setCategoryGap(14);
         return c;
+    }
+
+    private static BarChart<String, Number> periodChart(String axisLabel, List<ReportService.PeriodUtil> data) {
+        CategoryAxis x = new CategoryAxis();
+        NumberAxis y = new NumberAxis();
+        y.setLabel(axisLabel);
+        BarChart<String, Number> result = chart(x, y);
+        result.setLegendVisible(true);
+        XYChart.Series<String, Number> scheduled = new XYChart.Series<>();
+        scheduled.setName("Timetable");
+        XYChart.Series<String, Number> confirmed = new XYChart.Series<>();
+        confirmed.setName("Approved bookings");
+        for (ReportService.PeriodUtil item : data) {
+            scheduled.getData().add(new XYChart.Data<>(item.period(), item.scheduledMinutes() / 60.0));
+            confirmed.getData().add(new XYChart.Data<>(item.period(), item.confirmedBookingMinutes() / 60.0));
+        }
+        result.getData().add(scheduled);
+        result.getData().add(confirmed);
+        return result;
     }
 }

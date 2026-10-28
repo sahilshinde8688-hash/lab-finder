@@ -36,7 +36,8 @@ public final class Config {
         if (sys != null && !sys.isBlank()) return sys.trim();
         String env = System.getenv("SMARTSPACE_" + key.toUpperCase().replace('.', '_'));
         if (env != null && !env.isBlank()) return env.trim();
-        return PROPS.getProperty(key, fallback).trim();
+        String val = PROPS.getProperty(key, fallback);
+        return val == null ? null : val.trim();
     }
 
     public static int getInt(String key, int fallback) {

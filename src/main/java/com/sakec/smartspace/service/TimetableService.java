@@ -133,6 +133,7 @@ public class TimetableService {
     public List<String> detectConflicts(LocalDate from, int days) {
         Set<String> out = new LinkedHashSet<>();
         List<TimetableEntry> all = dao.listAll();
+        List<Booking> allBookings = bookings.blocking(from.atStartOfDay(), from.plusDays(days).atStartOfDay());
         for (int i = 0; i < days; i++) {
             LocalDate d = from.plusDays(i);
             List<ClassSlot> slots = expand(all, d, d);
@@ -146,7 +147,10 @@ public class TimetableService {
                     if (x.entry().className().equalsIgnoreCase(y.entry().className())) out.add("Class clash for " + x.entry().className() + " · " + when);
                 }
             }
-            for (Booking bk : bookings.blocking(d.atStartOfDay(), d.plusDays(1).atStartOfDay())) {
+            LocalDateTime dayStart = d.atStartOfDay();
+            LocalDateTime dayEnd = d.plusDays(1).atStartOfDay();
+            for (Booking bk : allBookings) {
+                if (!Dt.overlaps(dayStart, dayEnd, bk.start(), bk.end())) continue;
                 for (ClassSlot s : slots) {
                     if (s.entry().roomId() == bk.roomId() && Dt.overlaps(s.start(), s.end(), bk.start(), bk.end())) {
                         out.add("Booking overlaps class in " + bk.roomName() + " · " + d.format(Dt.DATE) + " " + Dt.range(bk.start(), bk.end()));

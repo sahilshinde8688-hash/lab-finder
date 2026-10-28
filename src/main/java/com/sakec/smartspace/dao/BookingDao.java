@@ -36,6 +36,15 @@ public class BookingDao {
 
     public List<Booking> listAll() { return Db.query(SELECT + "ORDER BY b.start_datetime DESC", MAPPER); }
 
+    public int latestBookingId() {
+        return Db.query("SELECT COALESCE(MAX(booking_id), 0) FROM bookings", rs -> rs.getInt(1)).get(0);
+    }
+
+    public List<Integer> bookingIdsAfter(int id) {
+        return Db.query("SELECT booking_id FROM bookings WHERE booking_id > ? ORDER BY booking_id",
+                rs -> rs.getInt(1), id);
+    }
+
     /** Approved or completed bookings that overlap [from, to). Pass a connection to stay inside a transaction. */
     public List<Booking> blocking(Connection c, LocalDateTime from, LocalDateTime to) {
         return Db.query(c, SELECT + "WHERE b.booking_status IN ('APPROVED','COMPLETED') "

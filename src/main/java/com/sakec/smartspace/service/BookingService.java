@@ -2,6 +2,7 @@ package com.sakec.smartspace.service;
 
 import com.sakec.smartspace.dao.BookingDao;
 import com.sakec.smartspace.dao.RoomDao;
+import com.sakec.smartspace.dao.UserDao;
 import com.sakec.smartspace.model.Booking;
 import com.sakec.smartspace.model.BookingStatus;
 import com.sakec.smartspace.model.Role;
@@ -30,8 +31,10 @@ public class BookingService {
     private static final ReentrantLock LOCK = new ReentrantLock();
     private final BookingDao bookings = new BookingDao();
     private final RoomDao rooms = new RoomDao();
+    private final UserDao users = new UserDao();
     private final AvailabilityService availability = new AvailabilityService();
     private final NotificationService notifications = new NotificationService();
+    private final EmailService mailer = new EmailService();
 
     public void validateSlot(LocalDate date, LocalTime start, LocalTime end) {
         if (date == null || start == null || end == null) throw new AppException("Choose a date, start time and end time.");
@@ -67,11 +70,18 @@ public class BookingService {
                 }
                 return bookings.insert(c, roomId, me.id(), purpose.trim(), s, e);
             });
+            Booking requested = bookings.findById((int) id);
             notifications.notifyCoordinators("New room request",
                     me.fullName() + " requested " + room.name() + " on " + date.format(Dt.DATE) + ", "
                             + start.format(Dt.TIME) + "–" + end.format(Dt.TIME) + ".");
+            mailer.send(me.email(), "SmartSpace room request confirmation",
+                    "Hello " + me.firstName() + ",\n\nYour room booking request for " + room.name() + " on "
+                            + date.format(Dt.DATE) + " from " + start.format(Dt.TIME) + " to " + end.format(Dt.TIME)
+                            + " has been submitted and is awaiting coordinator approval.\n\nPurpose: " + purpose.trim()
+                            + "\n\nYou will receive another email when the request is approved or rejected."
+            );
             Log.info("Booking requested id=" + id + " by userId=" + me.id());
-            return bookings.findById((int) id);
+            return requested;
         } finally {
             LOCK.unlock();
         }
@@ -104,6 +114,18 @@ public class BookingService {
             String extra = note == null || note.isBlank() ? "" : " Note: " + note.trim();
             notifications.notifyUser(b.userId(), "Booking " + verb, "Your request for " + b.roomName() + " on "
                     + b.start().format(Dt.DATE) + ", " + Dt.range(b.start(), b.end()) + " was " + verb + "." + extra);
+            User requester = users.findById(b.userId());
+            if (requester != null) {
+                String outcomeText = decision == BookingStatus.APPROVED
+                        ? "approved"
+                        : "rejected";
+                mailer.send(requester.email(), "SmartSpace booking " + outcomeText,
+                        "Hello " + requester.firstName() + ",\n\nYour room request for " + b.roomName() + " on "
+                                + b.start().format(Dt.DATE) + " from " + b.start().format(Dt.TIME) + " to "
+                                + b.end().format(Dt.TIME) + " was " + outcomeText + "." + extra
+                                + "\n\nIf you need help, please contact the timetable coordinator."
+                );
+            }
         } finally {
             LOCK.unlock();
         }
@@ -132,6 +154,16 @@ public class BookingService {
     public List<Booking> pending() {
         Permissions.require(Role.COORDINATOR);
         return bookings.listByStatus(BookingStatus.PENDING);
+    }
+
+    public int latestRequestId() {
+        Permissions.require(Role.COORDINATOR);
+        return bookings.latestBookingId();
+    }
+
+    public List<Integer> requestIdsAfter(int id) {
+        Permissions.require(Role.COORDINATOR);
+        return bookings.bookingIdsAfter(id);
     }
 
     public List<Booking> all() {

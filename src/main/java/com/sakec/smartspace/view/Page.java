@@ -38,6 +38,9 @@ public abstract class Page {
     /** Called each time the page becomes visible; reload data here. */
     public abstract void show();
 
+    /** Called when the page is replaced so it can stop page-scoped background work. */
+    public void hide() { }
+
     /** Runs work on a background thread with a spinner; shows a friendly toast if it fails. */
     protected <T> void load(Callable<T> work, Consumer<T> onDone) {
         pending++;

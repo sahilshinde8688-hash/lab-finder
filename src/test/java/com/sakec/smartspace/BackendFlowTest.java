@@ -2,20 +2,33 @@ package com.sakec.smartspace;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.sakec.smartspace.dao.RoomDao;
+import com.sakec.smartspace.dao.NavigationDao;
+import com.sakec.smartspace.dao.UserDao;
 import com.sakec.smartspace.model.Booking;
 import com.sakec.smartspace.model.BookingStatus;
+import com.sakec.smartspace.model.NavigationEdge;
+import com.sakec.smartspace.model.NavigationEdgeType;
+import com.sakec.smartspace.model.NavigationNode;
+import com.sakec.smartspace.model.NavigationNodeType;
+import com.sakec.smartspace.model.NavigationRoomLink;
+import com.sakec.smartspace.model.Role;
 import com.sakec.smartspace.model.Room;
 import com.sakec.smartspace.model.RoomStatus;
 import com.sakec.smartspace.model.SearchCriteria;
 import com.sakec.smartspace.model.RoomType;
+import com.sakec.smartspace.model.User;
 import com.sakec.smartspace.security.PasswordHasher;
+import com.sakec.smartspace.security.Session;
 import com.sakec.smartspace.service.AuthService;
 import com.sakec.smartspace.service.AvailabilityService;
 import com.sakec.smartspace.service.BookingService;
+import com.sakec.smartspace.service.NavigationService;
 import com.sakec.smartspace.util.AppException;
 import com.sakec.smartspace.util.Db;
 import com.sakec.smartspace.util.Dt;
@@ -27,6 +40,7 @@ import java.util.Set;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -38,6 +52,12 @@ class BackendFlowTest {
         f.deleteOnExit();
         System.setProperty("smartspace.db.url", "jdbc:sqlite:" + f.getAbsolutePath());
         Db.initSchema();
+    }
+
+    @AfterAll
+    static void tearDown() {
+        Db.clearPool();
+        System.clearProperty("smartspace.db.url");
     }
 
     @Test
@@ -68,6 +88,7 @@ class BackendFlowTest {
     void unauthenticatedUsersAreRejected() {
         assertThrows(AppException.class, () -> new BookingService().mine());
         assertThrows(AppException.class, () -> new AuthService().listUsers());
+        assertThrows(AppException.class, () -> new NavigationService().draft());
     }
 
     @Test
@@ -91,5 +112,50 @@ class BackendFlowTest {
                 .filter(room -> room.name().equals("Classroom 508 (PG Classroom)"))
                 .findFirst().orElseThrow().type());
         assertEquals(1, RoomLabelMatcher.matches(rooms, 5, "508", "pg classroom").size());
+    }
+
+    @Test
+    void navigationDraftPersistsNodesEdgesAndRoomLinks() {
+        NavigationDao dao = new NavigationDao();
+        long revision = dao.draft().revisionId();
+        Room room = new RoomDao().listActive().stream().filter(candidate -> candidate.floor() == 4)
+                .findFirst().orElseThrow();
+        dao.saveNode(revision, new NavigationNode("test-node-a", 4, NavigationNodeType.CORRIDOR,
+                "Test corridor A", .2, .3, true));
+        dao.saveNode(revision, new NavigationNode("test-node-b", 4, NavigationNodeType.JUNCTION,
+                "Test junction B", .4, .3, true));
+        dao.saveEdge(revision, new NavigationEdge("test-edge", "test-node-b", "test-node-a",
+                NavigationEdgeType.WALK, 8.5, true, true, true, true));
+        dao.saveRoomLink(revision, new NavigationRoomLink(room.id(), "test-node-a"));
+
+        var stored = dao.draft();
+
+        assertEquals(2, stored.nodes().size());
+        assertEquals(8.5, stored.edges().get(0).distanceMeters());
+        assertEquals(List.of(new NavigationRoomLink(room.id(), "test-node-a")), stored.roomLinks());
+    }
+
+    @Test
+    void coordinatorCanDeleteUserCompletely() {
+        AuthService auth = new AuthService();
+        UserDao users = new UserDao();
+        long coordId = users.create("Test Coordinator", "coord.delete@sakec.ac.in",
+                PasswordHasher.hash("CoordinatorPassword1!"), Role.COORDINATOR, "IT", false, false);
+        long studentId = users.create("Student To Delete", "student.delete@sakec.ac.in",
+                PasswordHasher.hash("StudentPassword1!"), Role.STUDENT, "IT", false, false);
+
+        User coord = users.findById((int) coordId);
+        Session.start(coord);
+        try {
+            // Cannot delete self
+            assertThrows(AppException.class, () -> auth.deleteUser((int) coordId));
+
+            // Delete student completely
+            assertNotNull(users.findById((int) studentId));
+            auth.deleteUser((int) studentId);
+            assertNull(users.findById((int) studentId));
+        } finally {
+            Session.clear();
+        }
     }
 }

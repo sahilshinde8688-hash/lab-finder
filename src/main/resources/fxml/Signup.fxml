@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<!--
+  Student Sign-Up screen.
+  Controller: com.sakec.smartspace.controller.SignupController
+  CSS: /css/app.css  (login-root, login-form-side, field-label, btn-primary, etc.)
+-->
+<StackPane fx:id="root" styleClass="login-root" xmlns="http://javafx.com/javafx/21"
+           xmlns:fx="http://javafx.com/fxml/1"
+           fx:controller="com.sakec.smartspace.controller.SignupController">
+
+    <HBox fx:id="contentRow" fillHeight="true">
+
+        <!-- Illustration pane (hidden on narrow screens by the controller) -->
+        <StackPane fx:id="artPane" styleClass="login-art" minWidth="0" HBox.hgrow="ALWAYS"/>
+
+        <!-- Form side -->
+        <ScrollPane fx:id="formScroll" fitToWidth="true" hbarPolicy="NEVER"
+                    styleClass="signup-scroll" prefWidth="512" maxWidth="620" minWidth="0">
+            <content>
+                <StackPane fx:id="formSide" styleClass="login-form-side" minWidth="0">
+                    <VBox fx:id="formBox" alignment="CENTER_LEFT" maxWidth="420" spacing="14">
+
+                        <!-- Brand -->
+                        <HBox fx:id="brandBox" alignment="CENTER_LEFT" spacing="8"/>
+
+                        <!-- Heading -->
+                        <VBox spacing="4">
+                            <Label styleClass="login-title" text="Create your account"/>
+                            <Label styleClass="muted login-subtitle" wrapText="true"
+                                   text="Student self-registration · SAKEC Microsoft 365 email required"/>
+                        </VBox>
+
+                        <!-- Full name -->
+                        <VBox spacing="6">
+                            <Label fx:id="nameLabel" styleClass="field-label" text="Full name"/>
+                            <TextField fx:id="nameField" promptText="e.g. Sahil Shinde"
+                                       accessibleText="Full name" onAction="#register"/>
+                            <Label fx:id="nameError" styleClass="error-text" managed="false"
+                                   visible="false" wrapText="true"/>
+                        </VBox>
+
+                        <!-- Email -->
+                        <VBox spacing="6">
+                            <Label fx:id="emailLabel" styleClass="field-label"
+                                   text="SAKEC email address"/>
+                            <TextField fx:id="emailField"
+                                       promptText="firstname.lastnameYY@sakec.onmicrosoft.com"
+                                       accessibleText="SAKEC email address" onAction="#register"/>
+                            <Label fx:id="emailError" styleClass="error-text" managed="false"
+                                   visible="false" wrapText="true"/>
+                        </VBox>
+
+                        <!-- Branch -->
+                        <VBox spacing="6">
+                            <Label fx:id="branchLabel" styleClass="field-label" text="Branch"/>
+                            <ComboBox fx:id="branchCombo" maxWidth="Infinity"
+                                      accessibleText="Select your branch"
+                                      promptText="— Select your branch —"/>
+                            <Label fx:id="branchError" styleClass="error-text" managed="false"
+                                   visible="false" wrapText="true"/>
+                        </VBox>
+
+                        <!-- Password -->
+                        <VBox spacing="6">
+                            <Label fx:id="passwordLabel" styleClass="field-label"
+                                   text="Create password"/>
+                            <HBox alignment="CENTER_LEFT" spacing="8">
+                                <StackPane HBox.hgrow="ALWAYS">
+                                    <PasswordField fx:id="passwordField"
+                                                   promptText="At least 12 characters"
+                                                   accessibleText="Create password"
+                                                   onAction="#register"/>
+                                    <TextField fx:id="passwordVisible"
+                                               promptText="At least 12 characters"
+                                               accessibleText="Create password"
+                                               managed="false" visible="false"
+                                               onAction="#register"/>
+                                </StackPane>
+                                <Button fx:id="toggleButton" styleClass="icon-btn"
+                                        onAction="#togglePassword"
+                                        accessibleText="Show password"
+                                        accessibleHelp="Shows or hides the password"/>
+                            </HBox>
+                            <Label fx:id="passwordError" styleClass="error-text" managed="false"
+                                   visible="false" wrapText="true"/>
+                        </VBox>
+
+                        <!-- Confirm password -->
+                        <VBox spacing="6">
+                            <Label fx:id="confirmLabel" styleClass="field-label"
+                                   text="Confirm password"/>
+                            <HBox alignment="CENTER_LEFT" spacing="8">
+                                <StackPane HBox.hgrow="ALWAYS">
+                                    <PasswordField fx:id="confirmField"
+                                                   promptText="Re-enter your password"
+                                                   accessibleText="Confirm password"
+                                                   onAction="#register"/>
+                                    <TextField fx:id="confirmVisible"
+                                               promptText="Re-enter your password"
+                                               accessibleText="Confirm password"
+                                               managed="false" visible="false"
+                                               onAction="#register"/>
+                                </StackPane>
+                                <Button fx:id="toggleConfirmButton" styleClass="icon-btn"
+                                        onAction="#toggleConfirm"
+                                        accessibleText="Show confirm password"/>
+                            </HBox>
+                            <Label fx:id="confirmError" styleClass="error-text" managed="false"
+                                   visible="false" wrapText="true"/>
+                        </VBox>
+
+                        <!-- Form-level error -->
+                        <Label fx:id="formError" styleClass="error-box" managed="false"
+                               visible="false" wrapText="true"/>
+
+                        <!-- Success banner (hidden until registration succeeds) -->
+                        <VBox fx:id="successBox" spacing="12" managed="false" visible="false"
+                              styleClass="signup-success-box">
+                            <Label styleClass="signup-success-text" wrapText="true"
+                                   text="Account created!"/>
+                            <Label fx:id="successLabel" styleClass="verify-banner-body" wrapText="true"
+                                   text="Check your inbox for a confirmation link. Click it, then sign in."/>
+                            <Label styleClass="muted-small" wrapText="true"
+                                   text="Didn't get the email? Check your spam folder or click below."/>
+                            <Button fx:id="resendFromSuccessButton" styleClass="btn,btn-secondary,btn-sm"
+                                    text="Resend confirmation email" onAction="#resendFromSuccess"/>
+                            <Label fx:id="resendSuccessStatus" styleClass="ok-text"
+                                   managed="false" visible="false" wrapText="true"/>
+                            <Button fx:id="goSignInButton" styleClass="btn,btn-primary,btn-wide"
+                                    maxWidth="Infinity" onAction="#goToLogin"
+                                    text="Go to Sign In"/>
+                        </VBox>
+
+                        <!-- Register button + spinner -->
+                        <StackPane fx:id="actionRow" maxWidth="Infinity">
+                            <Button fx:id="registerButton" styleClass="btn,btn-primary,btn-wide,login-signin"
+                                    defaultButton="true" maxWidth="Infinity"
+                                    onAction="#register" text="Create account"/>
+                            <ProgressIndicator fx:id="spinner" managed="false" visible="false"
+                                               maxHeight="20" maxWidth="20"
+                                               StackPane.alignment="CENTER_RIGHT">
+                                <StackPane.margin><Insets right="16"/></StackPane.margin>
+                            </ProgressIndicator>
+                        </StackPane>
+
+                        <!-- Back to sign-in link -->
+                        <Label styleClass="login-signup-link" text="Already have an account? Sign in"
+                               onMouseClicked="#goToLogin" wrapText="true"/>
+
+                        <!-- Password hint -->
+                        <Label styleClass="muted-small login-help" wrapText="true"
+                               text="Password must be at least 12 characters and contain letters and numbers."/>
+
+                    </VBox>
+                </StackPane>
+            </content>
+        </ScrollPane>
+
+    </HBox>
+</StackPane>

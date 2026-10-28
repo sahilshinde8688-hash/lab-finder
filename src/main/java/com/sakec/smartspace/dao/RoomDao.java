@@ -55,7 +55,8 @@ public class RoomDao {
     }
 
     public void recordView(int userId, int roomId) {
-        Db.update("INSERT OR REPLACE INTO recent_views(user_id, room_id, viewed_at) VALUES (?,?,?)",
+        Db.update("INSERT INTO recent_views(user_id, room_id, viewed_at) VALUES (?,?,?) "
+                + "ON CONFLICT (user_id, room_id) DO UPDATE SET viewed_at = excluded.viewed_at",
                 userId, roomId, Dt.toDb(LocalDateTime.now()));
     }
 

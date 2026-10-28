@@ -18,15 +18,30 @@ public final class SceneManager {
     public static void init(Stage s) {
         stage = s;
         s.setTitle("SmartSpace – SAKEC");
-        s.setMinWidth(1020);
-        s.setMinHeight(680);
+        s.setMinWidth(900);
+        s.setMinHeight(600);
         s.setWidth(1280);
         s.setHeight(800);
+        s.setMaximized(true);
     }
 
-    public static void showLogin() { swap("/fxml/Login.fxml"); }
+    public static void showLogin() {
+        stage.setMinWidth(560);
+        stage.setMinHeight(600);
+        swap("/fxml/Login.fxml");
+    }
 
-    public static void showMain() { swap("/fxml/Main.fxml"); }
+    public static void showSignup() {
+        stage.setMinWidth(560);
+        stage.setMinHeight(680);
+        swap("/fxml/Signup.fxml");
+    }
+
+    public static void showMain() {
+        stage.setMinWidth(900);
+        stage.setMinHeight(600);
+        swap("/fxml/Main.fxml");
+    }
 
     private static void swap(String fxml) {
         try {

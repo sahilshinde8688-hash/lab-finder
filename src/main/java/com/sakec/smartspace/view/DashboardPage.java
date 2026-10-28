@@ -17,15 +17,19 @@ import com.sakec.smartspace.service.ReportService.RoomUtil;
 import com.sakec.smartspace.ui.Anim;
 import com.sakec.smartspace.ui.EmptyState;
 import com.sakec.smartspace.ui.Forms;
+import com.sakec.smartspace.ui.Icons;
 import com.sakec.smartspace.ui.RoomCard;
 import com.sakec.smartspace.ui.StatCard;
 import com.sakec.smartspace.ui.StatusBadge;
+import com.sakec.smartspace.util.AppException;
+import com.sakec.smartspace.util.Async;
 import com.sakec.smartspace.util.Dt;
+import com.sakec.smartspace.util.Log;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.chart.BarChart;
@@ -36,36 +40,60 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.TextField;
-import javafx.scene.layout.FlowPane;
+import javafx.scene.layout.ColumnConstraints;
+import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+
+import java.util.concurrent.CompletableFuture;
 
 /** One class, three layouts: student, teacher and timetable coordinator dashboards. */
 public class DashboardPage extends Page {
-    private record Bundle(DashboardData data, Report report) { }
+    private record Bundle(DashboardData data, List<RoomUtil> topUtilization) { }
 
     private final Navigator nav;
     private final User me = Session.user();
     private final DashboardService service = new DashboardService();
 
-    public DashboardPage(Navigator nav) { this.nav = nav; }
+    public DashboardPage(Navigator nav) {
+        this.nav = nav;
+        body.setSpacing(16);
+        body.setPadding(new Insets(20, 24, 28, 24));
+    }
 
     @Override public String title() { return "Dashboard"; }
 
     @Override public void show() {
         load(() -> {
-            DashboardData d = service.load();
-            Report r = me.role() == Role.COORDINATOR ? new ReportService().build(LocalDate.now().minusDays(6), LocalDate.now()) : null;
-            new BookingService().completePast();
-            return new Bundle(d, r);
+            try {
+                var futureData = CompletableFuture.supplyAsync(service::load);
+                var futureUtil = CompletableFuture.supplyAsync(() -> {
+                    try {
+                        return me.role() == Role.COORDINATOR
+                                ? new ReportService().roomUtilization(LocalDate.now().minusDays(6), LocalDate.now())
+                                : List.<RoomUtil>of();
+                    } catch (Exception e) {
+                        Log.warn("Could not load room utilization for dashboard: " + e.getMessage());
+                        return List.<RoomUtil>of();
+                    }
+                });
+                return new Bundle(futureData.join(), futureUtil.join());
+            } catch (java.util.concurrent.CompletionException ce) {
+                Throwable cause = ce.getCause() != null ? ce.getCause() : ce;
+                if (cause instanceof RuntimeException re) throw re;
+                throw new AppException(cause.getMessage(), cause);
+            }
         }, b -> {
             switch (me.role()) {
                 case STUDENT -> student(b.data());
                 case TEACHER -> teacher(b.data());
-                case COORDINATOR -> coordinator(b.data(), b.report());
+                case COORDINATOR -> coordinator(b.data(), b.topUtilization());
             }
+            // Complete past bookings asynchronously so it doesn't block dashboard render
+            Async.run(() -> { new BookingService().completePast(); return null; }, ignored -> {}, err -> {});
         });
     }
 
@@ -83,27 +111,52 @@ public class DashboardPage extends Page {
         Button advanced = Forms.secondary("Filters & other times");
         advanced.setOnAction(e -> nav.go("rooms"));
         HBox searchRow = new HBox(10, quick, advanced);
+        searchRow.setMaxWidth(Double.MAX_VALUE);
 
-        FlowPane free = new FlowPane(14, 14);
+        GridPane roomGrid = new GridPane();
+        roomGrid.setHgap(12);
+        roomGrid.setVgap(12);
+        roomGrid.setMinWidth(0);
+        roomGrid.setMaxWidth(Double.MAX_VALUE);
+        for (int column = 0; column < 3; column++) {
+            ColumnConstraints constraints = new ColumnConstraints();
+            constraints.setPercentWidth(100.0 / 3);
+            constraints.setHgrow(Priority.ALWAYS);
+            constraints.setFillWidth(true);
+            constraints.setMinWidth(0);
+            roomGrid.getColumnConstraints().add(constraints);
+        }
         Runnable fill = () -> {
             String q = quick.getText() == null ? "" : quick.getText().trim().toLowerCase();
-            free.getChildren().clear();
-            List<RoomAvailability> shown = d.nowStatus().stream().filter(a -> a.status() == RoomStatus.AVAILABLE)
+            roomGrid.getChildren().clear();
+            List<RoomAvailability> shown = d.nowStatus().stream()
                     .filter(a -> q.isEmpty() || (a.room().name() + " " + a.room().type().label() + " " + a.room().facilities()).toLowerCase().contains(q))
                     .limit(8).toList();
-            if (shown.isEmpty()) free.getChildren().add(new EmptyState("search", "No free rooms match", "Try a different search or check other times."));
-            for (RoomAvailability a : shown) free.getChildren().add(roomCard(a));
+            if (shown.isEmpty()) {
+                EmptyState empty = new EmptyState("search", "No rooms match", "Try a different search or check room filters.");
+                GridPane.setColumnSpan(empty, 3);
+                roomGrid.add(empty, 0, 0);
+            }
+            for (int index = 0; index < shown.size(); index++) {
+                RoomCard card = roomCard(shown.get(index));
+                card.setMinWidth(0);
+                card.setMaxWidth(Double.MAX_VALUE);
+                roomGrid.add(card, index % 3, index / 3);
+            }
         };
         quick.textProperty().addListener((o, a, b) -> fill.run());
         fill.run();
 
         VBox right = new VBox(16, upcoming("Upcoming classes today", d.todayAll()), recentRooms(d.recentRooms()),
                 bookingList(d.recentBookings()), quickActions());
-        right.setPrefWidth(370);
-        right.setMinWidth(300);
-        VBox left = new VBox(16, Forms.card("Available right now", new VBox(14, searchRow, free)));
+        VBox availabilityContent = new VBox(12, searchRow, roomGrid);
+        availabilityContent.setMaxWidth(Double.MAX_VALUE);
+        VBox availabilityCard = dashboardCard("Room availability", availabilityContent);
+        availabilityCard.setMaxWidth(Double.MAX_VALUE);
+        VBox left = new VBox(16, availabilityCard);
+        left.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(left, Priority.ALWAYS);
-        setContent(welcome(d), stats, new HBox(18, left, right));
+        setContent(welcome(d), stats, responsiveColumns(left, right));
     }
 
     // ---- teacher -----------------------------------------------------------------------------
@@ -118,21 +171,32 @@ public class DashboardPage extends Page {
 
         VBox rooms = new VBox(8);
         if (d.assignedRooms().isEmpty()) rooms.getChildren().add(Forms.muted("Rooms from your timetable will appear here."));
-        for (Room r : d.assignedRooms()) rooms.getChildren().add(new Label(r.name() + " · Floor " + r.floor() + " · " + r.type().label()));
+        for (Room r : d.assignedRooms()) {
+            StackPane icon = new StackPane(Icons.of("grid", 16, "#3156B8"));
+            icon.getStyleClass().add("dashboard-room-icon");
+            Label name = new Label(r.name());
+            name.getStyleClass().add("dashboard-room-name");
+            Label detail = new Label("Floor " + r.floor() + " · " + r.type().label());
+            detail.getStyleClass().add("muted-small");
+            HBox row = new HBox(10, icon, new VBox(2, name, detail));
+            row.getStyleClass().add("dashboard-room-row");
+            row.setAlignment(Pos.CENTER_LEFT);
+            rooms.getChildren().add(row);
+        }
 
         Button find = Forms.withIcon(Forms.primary("Find or request a room"), "search", "#FFFFFF");
         find.setOnAction(e -> nav.go("rooms"));
-        VBox right = new VBox(16, Forms.card("My rooms", rooms), bookingList(d.recentBookings()), Forms.card("Quick actions", new VBox(10, find, reportButton())));
-        right.setPrefWidth(370);
-        right.setMinWidth(300);
-        VBox left = new VBox(16, upcoming("My timetable today", d.todayMine()), Forms.card("Available rooms by floor", floorBars(d.floors())));
+        VBox right = new VBox(16, dashboardCard("My rooms", rooms), bookingList(d.recentBookings()),
+                dashboardCard("Quick actions", new VBox(10, find, reportButton())));
+        VBox left = new VBox(16, upcoming("My timetable today", d.todayMine()),
+                dashboardCard("Available rooms by floor", floorBars(d.floors())));
         HBox.setHgrow(left, Priority.ALWAYS);
-        setContent(welcome(d), stats, new HBox(18, left, right));
+        setContent(welcome(d), stats, responsiveColumns(left, right));
     }
 
     // ---- coordinator -------------------------------------------------------------------------
 
-    private void coordinator(DashboardData d, Report r) {
+    private void coordinator(DashboardData d, List<RoomUtil> topUtilization) {
         HBox row1 = statRow(new StatCard("layers", "Total rooms", String.valueOf(d.totalRooms()), "navy"),
                 new StatCard("grid", "Classrooms", String.valueOf(d.classrooms()), "blue"),
                 new StatCard("tool", "Laboratories", String.valueOf(d.labs()), "teal"),
@@ -149,15 +213,15 @@ public class DashboardPage extends Page {
         BarChart<String, Number> chart = new BarChart<>(x, y);
         chart.setLegendVisible(false);
         chart.setAnimated(!Anim.reduced());
-        chart.setPrefHeight(280);
+        chart.setPrefHeight(240);
         XYChart.Series<String, Number> s = new XYChart.Series<>();
-        for (RoomUtil u : r.utilization().stream().limit(8).toList()) {
+        for (RoomUtil u : topUtilization.stream().limit(8).toList()) {
             s.getData().add(new XYChart.Data<>(u.room().name(), Math.round(u.percent() * 10) / 10.0));
         }
         chart.getData().add(s);
         Button more = Forms.secondary("Full analytics");
         more.setOnAction(e -> nav.go("analytics"));
-        VBox utilCard = Forms.card("Room utilization", new VBox(10, chart, more));
+        VBox utilCard = dashboardCard("Room utilization", new VBox(10, chart, more));
 
         VBox alerts = new VBox(8);
         if (d.conflicts().isEmpty()) alerts.getChildren().add(Forms.muted("✓ No conflicts in the next 7 days."));
@@ -171,14 +235,12 @@ public class DashboardPage extends Page {
         review.setOnAction(e -> nav.go("requests"));
         Button tt = Forms.secondary("Open timetable");
         tt.setOnAction(e -> nav.go("timetable"));
-        VBox right = new VBox(16, Forms.card("Conflict alerts", alerts),
-                Forms.card("Floors · free now", floorBars(d.floors())),
-                Forms.card("Quick actions", new HBox(10, review, tt)));
-        right.setPrefWidth(360);
-        right.setMinWidth(320);
+        VBox right = new VBox(16, dashboardCard("Conflict alerts", alerts),
+                dashboardCard("Floors · free now", floorBars(d.floors())),
+                dashboardCard("Quick actions", new HBox(10, review, tt)));
         VBox left = new VBox(16, utilCard, upcoming("Today's scheduled classes", d.todayAll()));
         HBox.setHgrow(left, Priority.ALWAYS);
-        setContent(welcome(d), row1, row2, new HBox(18, left, right));
+        setContent(welcome(d), row1, row2, responsiveColumns(left, right));
     }
 
     // ---- shared pieces -----------------------------------------------------------------------
@@ -187,16 +249,40 @@ public class DashboardPage extends Page {
         int h = LocalDateTime.now().getHour();
         String greet = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
         Label hello = new Label(greet + ", " + me.firstName());
-        hello.getStyleClass().add("page-heading");
+        hello.getStyleClass().add("dashboard-greeting");
+        hello.setWrapText(true);
         String who = me.role().label() + (me.department() == null || me.department().isBlank() ? "" : " · " + me.department());
-        Label sub = new Label(who + " · " + LocalDate.now().format(Dt.LONG_DATE));
-        sub.getStyleClass().add("muted");
-        return new VBox(4, hello, sub);
+        Label kicker = new Label("YOUR CAMPUS, AT A GLANCE");
+        kicker.getStyleClass().add("dashboard-kicker");
+        Label sub = new Label(who);
+        sub.getStyleClass().add("dashboard-subtitle");
+        VBox copy = new VBox(6, kicker, hello, sub);
+
+        Label today = new Label("TODAY");
+        today.getStyleClass().add("dashboard-date-kicker");
+        Label date = new Label(LocalDate.now().format(Dt.LONG_DATE));
+        date.getStyleClass().add("dashboard-date");
+        VBox dateCard = new VBox(4, today, date);
+        dateCard.getStyleClass().add("dashboard-date-card");
+        dateCard.setAlignment(Pos.CENTER_LEFT);
+
+        HBox hero = new HBox(copy, dateCard);
+        hero.getStyleClass().add("dashboard-hero");
+        hero.setAlignment(Pos.CENTER_LEFT);
+        hero.setMinWidth(0);
+        HBox.setHgrow(copy, Priority.ALWAYS);
+        return hero;
     }
 
     private HBox statRow(StatCard... cards) {
-        HBox row = new HBox(16, cards);
-        for (StatCard c : cards) { HBox.setHgrow(c, Priority.ALWAYS); c.setMaxWidth(Double.MAX_VALUE); c.setMinWidth(170); }
+        HBox row = new HBox(12, cards);
+        row.getStyleClass().add("dashboard-stats");
+        row.setFillHeight(true);
+        for (StatCard card : cards) {
+            HBox.setHgrow(card, Priority.ALWAYS);
+            card.setMaxWidth(Double.MAX_VALUE);
+            card.setMinWidth(0);
+        }
         return row;
     }
 
@@ -208,14 +294,45 @@ public class DashboardPage extends Page {
         request.getStyleClass().add("btn-sm");
         request.setOnAction(e -> Dialogs.book(a.room(), this::show));
         RoomCard c = new RoomCard(a, List.of(details, request));
-        c.setPrefWidth(260);
         return c;
+    }
+
+    private VBox responsiveColumns(VBox left, VBox right) {
+        VBox columns = new VBox(16);
+        HBox wideColumns = new HBox(16);
+        columns.setMaxWidth(Double.MAX_VALUE);
+        wideColumns.setMaxWidth(Double.MAX_VALUE);
+        columns.getChildren().setAll(left, right);
+        left.setMinWidth(0);
+        right.setMinWidth(280);
+        right.setPrefWidth(350);
+        right.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(left, Priority.ALWAYS);
+        columns.widthProperty().addListener((o, oldWidth, newWidth) -> {
+            if (newWidth.doubleValue() >= 1200 && wideColumns.getParent() != columns) {
+                columns.getChildren().clear();
+                wideColumns.getChildren().setAll(left, right);
+                columns.getChildren().setAll(wideColumns);
+            } else if (newWidth.doubleValue() < 1200 && wideColumns.getParent() == columns) {
+                wideColumns.getChildren().clear();
+                columns.getChildren().setAll(left, right);
+            }
+        });
+        return columns;
+    }
+
+    private VBox dashboardCard(String title, Node content) {
+        VBox card = Forms.card(title, content);
+        card.setSpacing(12);
+        card.setPadding(new Insets(16));
+        card.getStyleClass().add("dashboard-widget");
+        return card;
     }
 
     private VBox upcoming(String title, List<ClassSlot> slots) {
         LocalDateTime now = LocalDateTime.now();
         VBox list = new VBox(10);
-        List<ClassSlot> shown = slots.stream().filter(s -> s.end().isAfter(now)).limit(7).toList();
+        List<ClassSlot> shown = slots.stream().filter(s -> s.end().isAfter(now)).limit(5).toList();
         if (shown.isEmpty()) list.getChildren().add(Forms.muted("No more classes scheduled today."));
         for (ClassSlot s : shown) {
             boolean live = !s.start().isAfter(now);
@@ -226,18 +343,24 @@ public class DashboardPage extends Page {
             subj.getStyleClass().add("list-title");
             Label meta = new Label(s.entry().className() + " · " + s.entry().roomName() + " · " + s.entry().facultyName());
             meta.getStyleClass().add("muted-small");
+            meta.setWrapText(true);
             HBox row = new HBox(12, time, new VBox(2, subj, meta));
             row.setAlignment(Pos.CENTER_LEFT);
             list.getChildren().add(row);
         }
-        return Forms.card(title, list);
+        return dashboardCard(title, list);
     }
 
     private VBox recentRooms(List<Room> rooms) {
         VBox list = new VBox(6);
         if (rooms.isEmpty()) list.getChildren().add(Forms.muted("Rooms you open will be listed here."));
-        for (Room r : rooms) list.getChildren().add(new Label(r.name() + " · Floor " + r.floor() + " · " + r.type().label()));
-        return Forms.card("Recently viewed", list);
+        for (Room r : rooms) {
+            Label room = new Label(r.name() + " · Floor " + r.floor() + " · " + r.type().label());
+            room.setWrapText(true);
+            room.setMaxWidth(Double.MAX_VALUE);
+            list.getChildren().add(room);
+        }
+        return dashboardCard("Recently viewed", list);
     }
 
     private VBox bookingList(List<Booking> bookings) {
@@ -245,6 +368,8 @@ public class DashboardPage extends Page {
         if (bookings.isEmpty()) list.getChildren().add(Forms.muted("No booking requests yet."));
         for (Booking b : bookings) {
             Label l = new Label(b.roomName() + " · " + b.start().format(Dt.DATE) + " " + b.start().format(Dt.TIME));
+            l.setWrapText(true);
+            l.setMaxWidth(220);
             Region sp = new Region();
             HBox.setHgrow(sp, Priority.ALWAYS);
             HBox row = new HBox(8, l, sp, StatusBadge.of(b.status()));
@@ -254,13 +379,13 @@ public class DashboardPage extends Page {
         Button all = Forms.ghost("View all");
         all.setOnAction(e -> nav.go("bookings"));
         list.getChildren().add(all);
-        return Forms.card("My booking requests", list);
+        return dashboardCard("My booking requests", list);
     }
 
     private VBox quickActions() {
         Button find = Forms.withIcon(Forms.primary("Find a room"), "search", "#FFFFFF");
         find.setOnAction(e -> nav.go("rooms"));
-        return Forms.card("Quick actions", new VBox(10, find, reportButton()));
+        return dashboardCard("Quick actions", new VBox(10, find, reportButton()));
     }
 
     private Button reportButton() {
@@ -276,11 +401,13 @@ public class DashboardPage extends Page {
             name.setMinWidth(60);
             ProgressBar bar = new ProgressBar(c[1] == 0 ? 0 : c[0] / (double) c[1]);
             bar.setMaxWidth(Double.MAX_VALUE);
+            bar.setPrefHeight(10);
             HBox.setHgrow(bar, Priority.ALWAYS);
             Label txt = new Label(c[1] == 0 ? "no rooms" : c[0] + "/" + c[1] + " free");
             txt.getStyleClass().add("muted-small");
             txt.setMinWidth(70);
             HBox row = new HBox(10, name, bar, txt);
+            row.getStyleClass().add("floor-availability-row");
             row.setAlignment(Pos.CENTER_LEFT);
             box.getChildren().add(row);
         });

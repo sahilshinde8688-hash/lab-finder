@@ -16,11 +16,19 @@ public final class Dt {
 
     public static String toDb(LocalDateTime t) { return t == null ? null : t.format(DB); }
 
-    public static LocalDateTime fromDb(String s) { return s == null ? null : LocalDateTime.parse(s, DB); }
+    public static LocalDateTime fromDb(String s) {
+        if (s == null || s.isBlank()) return null;
+        if (s.length() == 10) return LocalDate.parse(s).atStartOfDay();
+        return LocalDateTime.parse(s, DB);
+    }
 
     public static String toDb(LocalDate d) { return d == null ? null : d.atStartOfDay().format(DB); }
 
-    public static LocalDate dateFromDb(String s) { return s == null ? null : LocalDateTime.parse(s, DB).toLocalDate(); }
+    public static LocalDate dateFromDb(String s) {
+        if (s == null || s.isBlank()) return null;
+        if (s.length() == 10) return LocalDate.parse(s);
+        return LocalDateTime.parse(s, DB).toLocalDate();
+    }
 
     /** Two half-open intervals [aStart,aEnd) and [bStart,bEnd) overlap. Touching ends do not overlap. */
     public static boolean overlaps(LocalDateTime aStart, LocalDateTime aEnd, LocalDateTime bStart, LocalDateTime bEnd) {

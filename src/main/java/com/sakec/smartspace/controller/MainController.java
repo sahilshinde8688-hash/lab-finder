@@ -6,13 +6,16 @@ import com.sakec.smartspace.model.Role;
 import com.sakec.smartspace.model.User;
 import com.sakec.smartspace.security.Session;
 import com.sakec.smartspace.service.AuthService;
+import com.sakec.smartspace.service.BookingService;
 import com.sakec.smartspace.service.NotificationService;
+import com.sakec.smartspace.service.NotificationSound;
 import com.sakec.smartspace.ui.Anim;
 import com.sakec.smartspace.ui.Brand;
 import com.sakec.smartspace.ui.Icons;
 import com.sakec.smartspace.ui.Modal;
 import com.sakec.smartspace.util.Async;
 import com.sakec.smartspace.util.Dt;
+import com.sakec.smartspace.util.Log;
 import com.sakec.smartspace.view.AnalyticsPage;
 import com.sakec.smartspace.view.BookingsPage;
 import com.sakec.smartspace.view.DashboardPage;
@@ -26,8 +29,10 @@ import com.sakec.smartspace.view.RoomsPage;
 import com.sakec.smartspace.view.TimetablePage;
 import com.sakec.smartspace.view.UsersPage;
 import java.time.LocalDate;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.fxml.FXML;
@@ -44,10 +49,18 @@ import javafx.util.Duration;
 public class MainController implements Navigator {
     private final User me = Session.user();
     private final NotificationService notifications = new NotificationService();
+    private final BookingService bookings = new BookingService();
     private final Map<String, Button> navButtons = new LinkedHashMap<>();
+    private final Set<Integer> soundedRequestIds = new HashSet<>();
     private Timeline poller;
+    private Page currentPage;
+    private int latestRequestId;
+    private boolean requestTrackingReady;
+    private boolean requestPollInFlight;
+    private String currentPageKey;
 
     @FXML private StackPane root;
+    @FXML private VBox sidebar;
     @FXML private HBox brandBox;
     @FXML private VBox navBox;
     @FXML private Label avatarLabel, nameLabel, roleLabel, pageTitle, dateLabel, badgeLabel;
@@ -59,6 +72,8 @@ public class MainController implements Navigator {
     private void initialize() {
         com.sakec.smartspace.ui.Overlay.setHost(root);
         Brand.fill(brandBox, true);
+        root.widthProperty().addListener((observable, oldWidth, newWidth) ->
+                sidebar.setPrefWidth(newWidth.doubleValue() < 1120 ? 216 : 232));
         avatarLabel.setText(me.initials());
         nameLabel.setText(me.fullName());
         roleLabel.setText(me.role().label());
@@ -102,10 +117,14 @@ public class MainController implements Navigator {
 
         Events.onNotificationsChanged(this::refreshBadge);
         refreshBadge();
-        poller = new Timeline(new KeyFrame(Duration.seconds(30), e -> refreshBadge()));
+        poller = new Timeline(new KeyFrame(Duration.seconds(30), e -> {
+            refreshBadge();
+            pollRoomRequests();
+        }));
         poller.setCycleCount(Timeline.INDEFINITE);
         poller.play();
 
+        if (me.role() == Role.COORDINATOR) initializeRequestTracking();
         go("dashboard");
         if (me.mustChangePassword()) {
             Dialogs.changePassword(true, () -> { }, this::doSignOut);
@@ -128,6 +147,9 @@ public class MainController implements Navigator {
     public void go(String key) {
         Page page = create(key);
         if (page == null) return;
+        if (currentPage != null) currentPage.hide();
+        currentPage = page;
+        currentPageKey = key;
         navButtons.forEach((k, b) -> {
             boolean active = k.equals(key) || ("bookings".equals(key) && "requests".equals(k));
             b.getStyleClass().remove("nav-item-active");
@@ -137,6 +159,31 @@ public class MainController implements Navigator {
         contentHost.getChildren().setAll(page.root());
         Anim.fadeIn(page.root());
         page.show();
+    }
+
+    private void initializeRequestTracking() {
+        Async.run(bookings::latestRequestId, id -> {
+            latestRequestId = id;
+            requestTrackingReady = true;
+            pollRoomRequests();
+        }, ex -> Log.error("Could not initialize room-request notifications", ex));
+    }
+
+    private void pollRoomRequests() {
+        if (me.role() != Role.COORDINATOR || !requestTrackingReady || requestPollInFlight || !Session.isSignedIn()) return;
+        requestPollInFlight = true;
+        Async.run(() -> bookings.requestIdsAfter(latestRequestId), ids -> {
+            for (int id : ids) {
+                latestRequestId = Math.max(latestRequestId, id);
+                if (currentPageKey.equals("dashboard") && soundedRequestIds.add(id)) {
+                    NotificationSound.playForRequest(id);
+                }
+            }
+            requestPollInFlight = false;
+        }, ex -> {
+            requestPollInFlight = false;
+            Log.error("Could not check for new room requests", ex);
+        });
     }
 
     private Page create(String key) {
@@ -174,7 +221,9 @@ public class MainController implements Navigator {
 
     private void doSignOut() {
         if (poller != null) poller.stop();
+        if (currentPage != null) currentPage.hide();
         Events.onNotificationsChanged(null);
+        requestTrackingReady = false;
         new AuthService().logout();
         SceneManager.showLogin();
     }

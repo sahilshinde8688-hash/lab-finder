@@ -42,7 +42,7 @@ public class UsersPage extends Page {
                 Tables.text("Role", u -> u.role().label(), 150),
                 Tables.text("Department", u -> u.department() == null ? "" : u.department(), 160),
                 Tables.node("Status", u -> StatusBadge.make(u.active() ? "Active" : "Disabled", u.active() ? "badge-available" : "badge-unavailable"), 110),
-                Tables.node("", this::actions, 230))));
+                Tables.node("", this::actions, 300))));
     }
 
     private Node actions(User u) {
@@ -59,6 +59,14 @@ public class UsersPage extends Page {
             toggle.getStyleClass().add("btn-sm");
             toggle.setOnAction(e -> act(() -> { auth.setActive(u.id(), !u.active()); return u.active() ? "Account disabled." : "Account enabled."; }));
             row.getChildren().add(toggle);
+
+            Button delete = Forms.danger("Delete");
+            delete.getStyleClass().add("btn-sm");
+            delete.setOnAction(e -> Modal.confirm("Delete " + u.fullName() + "?",
+                    "Are you sure you want to completely delete " + u.fullName() + " (" + u.email() + ") from the database?\nThis will permanently remove the user and their associated data.",
+                    "Delete", true,
+                    () -> act(() -> { auth.deleteUser(u.id()); return "User deleted successfully."; })));
+            row.getChildren().add(delete);
         }
         return row;
     }
